@@ -1,0 +1,25 @@
+{% extends 'reconciliation/base.html' %}
+
+{% block content %}
+<h2>Upload CSV Files</h2>
+{% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="source" class="form-label">Source CSV File</label>
+        <input class="form-control" type="file" id="source" name="source" accept=".csv" required>
+    </div>
+    <div class="mb-3">
+        <label for="target" class="form-label">Target CSV File</label>
+        <input class="form-control" type="file" id="target" name="target" accept=".csv" required>
+    </div>
+    <div class="mb-3">
+        <label for="ignore_columns" class="form-label">Columns to Ignore (comma-separated)</label>
+        <input type="text" class="form-control" id="ignore_columns" name="ignore_columns">
+        <div class="form-text">Enter column names you want to exclude from comparison</div>
+    </div>
+    <button type="submit" class="btn btn-primary">Reconcile</button>
+</form>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends 'reconciliation/base.html' %}
+
+{% block content %}
+<h2>Reconciliation Report</h2>
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Summary</h5>
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">Records missing in target: <span class="badge bg-primary">{{ missing_in_target }}</span></li>
+            <li class="list-group-item">Records missing in source: <span class="badge bg-primary">{{ missing_in_source }}</span></li>
+            <li class="list-group-item">Records with field discrepancies: <span class="badge bg-primary">{{ field_discrepancies }}</span></li>
+        </ul>
+    </div>
+</div>
+
+<h4>Detailed Results</h4>
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Type</th>
+                <th>Record ID</th>
+                <th>Field</th>
+                <th>Source Value</th>
+                <th>Target Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>{{ result.type|title }}</td>
+                <td>{{ result.id }}</td>
+                <td>{{ result.field|default:"-" }}</td>
+                <td>{{ result.source_value|default:"-" }}</td>
+                <td>{{ result.target_value|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<a href="{% url 'upload' %}" class="btn btn-secondary mt-3">Perform Another Reconciliation</a>
+{% endblock %}

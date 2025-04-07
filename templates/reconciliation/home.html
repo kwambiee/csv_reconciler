@@ -1,0 +1,11 @@
+{% extends 'reconciliation/base.html' %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">CSV Reconciliation Tool</h1>
+    <p class="lead">Upload two CSV files to compare and identify discrepancies between them.</p>
+    <hr class="my-4">
+    <p>The tool will identify missing records and field-level differences between your source and target files.</p>
+    <a class="btn btn-primary btn-lg" href="{% url 'upload' %}" role="button">Get Started</a>
+</div>
+{% endblock %}
