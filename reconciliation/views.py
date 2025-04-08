@@ -243,40 +243,30 @@ class ReportDetailView(View):
         
         # Get filter parameters
         discrepancy_type = request.GET.get('type', '')
-        field_name = request.GET.get('field', '')
+        # field_name = request.GET.get('field', '')
         search_query = request.GET.get('search', '')
         
         # Read report data
         results_df = pd.read_csv(report.report_file.path)
         
         # Convert JSON strings back to dictionaries
+        for col in ['source_value', 'target_value']:
+            if results_df[col].apply(lambda x: isinstance(x, str) and x.startswith('{') and x.endswith('}')).any():
+                for idx, val in results_df[col].items():
+                    try:
+                        if isinstance(val, str) and val.startswith('{') and val.endswith('}'):
+                            val = val.replace("'", '"')
+                            results_df.at[idx, col] = json.loads(val)
+                    except json.JSONDecodeError as e:
+                        print(f"JSON Decode Error: {e} at index {idx} in column {col}")
+                        print(f"Value: {val}")
 
-
-    #     for col in ['source_value', 'target_value']:
-    # # Check if any element in the column is a string that starts and ends with '{' and '}'
-    #         if results_df[col].apply(lambda x: isinstance(x, str) and x.startswith('{') and x.endswith('}')).any():
-    #             for idx, val in results_df[col].items():
-    #                 try:
-    #                     # Apply json.loads only if the value is a valid string that starts and ends with curly braces
-    #                     if isinstance(val, str) and val.startswith('{') and val.endswith('}'):
-    #                         # Replace single quotes with double quotes to make it valid JSON
-    #                         val = val.replace("'", '"')
-    #                         results_df.at[idx, col] = json.loads(val)
-    #                 except json.JSONDecodeError as e:
-    #                     # Catch the exception and print detailed error info
-    #                     print(f"JSON Decode Error: {e} at index {idx} in column {col}")
-    #                     print(f"Value: {val}")
-    #                     print("DataFrame:", results_df)
-
-# Convert the DataFrame to a list of dictionaries (records)
         results = results_df.to_dict('records')
         
         # Apply filters
         filtered_results = results
         if discrepancy_type:
             filtered_results = [r for r in filtered_results if r['type'] == discrepancy_type]
-        if field_name:
-            filtered_results = [r for r in filtered_results if r['field'] == field_name]
         if search_query:
             search_query = search_query.lower()
             filtered_results = [
@@ -296,41 +286,32 @@ class ReportDetailView(View):
         unique_types = results_df['type'].unique()
         unique_fields = results_df['field'].dropna().unique()
         
-        print(filtered_results, "----filtered_results")
-
+        # Prepare modal results
         model_results = []
-
         for result in filtered_results:
             if result.get('field') == "complete_record":
                 val = result.get('source_value') or result.get('target_value')
-
-        # If val is a dict, wrap it in a list to standardize as array of objects
                 if isinstance(val, dict):
                     val = [val]
                     
-                    
                 model_results.append({
-                'id': result.get('id'),
-                'field': result.get('field'),
-                'source_value': val,
-                'target_value': val,
-            })     
-            
-                print(model_results, "----model_results")
-                
-                return render(request, 'reconciliation/report_detail.html', {
-                    'report': report,
-                    'results': filtered_results,
-                    'unique_types': unique_types,
-                    'unique_fields': unique_fields,
-                    'current_type_filter': discrepancy_type,
-                    'current_field_filter': field_name,
-                    'search_query': search_query,
-                    'modal_results': model_results,
-                    
+                    'id': result.get('id'),
+                    'field': result.get('field'),
+                    'source_value': val,
+                    'target_value': val,
                 })
 
-
+        # Always return a response
+        return render(request, 'reconciliation/report_detail.html', {
+            'report': report,
+            'results': page_obj,  # Use paginated results
+            'unique_types': unique_types,
+            'unique_fields': unique_fields,
+            'current_type_filter': discrepancy_type,
+            'current_field_filter': field_name,
+            'search_query': search_query,
+            'modal_results': model_results,
+        })
 
 class FilePreviewView(View):
     def get(self, request, file_id):

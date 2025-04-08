@@ -80,11 +80,6 @@
                 <div class="card-header">
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">Discrepancy Details</h5>
-                        {% comment %} <div>
-                            <a href="{{ report.report_file.url }}" class="btn btn-sm btn-success" download>
-                                <i class="bi bi-download"></i> Download Full Report
-                            </a>
-                        </div> {% endcomment %}
                     </div>
                 </div>
                 <div class="card-body">
@@ -101,7 +96,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            {% comment %} <div class="col-md-3">
                                 <label for="field" class="form-label">Field</label>
                                 <select name="field" id="field" class="form-select">
                                     <option value="">All Fields</option>
@@ -111,7 +106,7 @@
                                     </option>
                                     {% endfor %}
                                 </select>
-                            </div>
+                            </div> {% endcomment %}
                             <div class="col-md-4">
                                 <label for="search" class="form-label">Search</label>
                                 <input type="text" name="search" id="search" class="form-control" 
@@ -247,25 +242,7 @@
     </table>
 </div>
 
-<div>
-    {% for item in modal_results%}
-       
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Complete Record Details</h5>
-                
-                <ul>
-                    <li>
-                        {{item.id}}
-                        {{item.source_value.0.ID}}
-                        {{item.target_value}}
 
-                        
-                    </li>
-                </ul>
-            </div>
-       
-    {% endfor %}
-</div>
 
         {% for result in modal_results %}
             
