@@ -208,28 +208,53 @@ class CSVReconciler:
         results = []
     
         # Add missing records
+        # for _, row in missing_in_target.iterrows():
+        #     results.append({
+        #         'type': 'missing_in_target',
+        #         'id': row[id_col],
+        #         'field': None,
+        #         'source_value': None,
+        #         'target_value': None,
+        #         'discrepancy_type': None,
+        #         'difference': None
+        #     })
+            
+        # for _, row in missing_in_source.iterrows():
+        #     results.append({
+        #         'type': 'missing_in_source',
+        #         'id': row[id_col],
+        #         'field': None,
+        #         'source_value': None,
+        #         'target_value': None,
+        #         'discrepancy_type': None,
+        #         'difference': None
+        #     })
+        
+        
+        # In service.py, modify the missing records sections:
+
+    # Add missing records
         for _, row in missing_in_target.iterrows():
             results.append({
                 'type': 'missing_in_target',
                 'id': row[id_col],
-                'field': None,
-                'source_value': None,
+                'field': 'complete_record',
+                'source_value': row.to_dict(),
                 'target_value': None,
-                'discrepancy_type': None,
+                'discrepancy_type': 'missing_record',
                 'difference': None
             })
-            
+    
         for _, row in missing_in_source.iterrows():
             results.append({
                 'type': 'missing_in_source',
                 'id': row[id_col],
-                'field': None,
+                'field': 'complete_record',
                 'source_value': None,
-                'target_value': None,
-                'discrepancy_type': None,
+                'target_value': row.to_dict(),
+                'discrepancy_type': 'missing_record',
                 'difference': None
             })
-        
         # Add discrepancies
         results.extend(discrepancies)
         

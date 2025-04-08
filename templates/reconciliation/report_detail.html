@@ -128,7 +128,7 @@
                         </form>
                     </div>
 
-                    <div class="table-responsive">
+                    {% comment %} <div class="table-responsive">
                         <table class="table table-striped table-hover">
                             <thead class="table-dark">
                                 <tr>
@@ -171,7 +171,166 @@
                                 {% endfor %}
                             </tbody>
                         </table>
+                    </div> {% endcomment %}
+
+                    <!-- Replace the table section with this: -->
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>Type</th>
+                <th>Record ID</th>
+                <th>Field</th>
+                <th>Source Value</th>
+                <th>Target Value</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+            <tr>
+                <td>
+                    <span class="badge 
+                        {% if result.type == 'missing_in_target' %}bg-danger
+                        {% elif result.type == 'missing_in_source' %}bg-warning
+                        {% else %}bg-info{% endif %}">
+                        {{ result.type|title }}
+                    </span>
+                </td>
+                <td>{{ result.id }}</td>
+                <td>
+                    {% if result.field == 'complete_record' %}
+                        All Fields
+                    {% else %}
+                        {{ result.field|default:"-" }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if result.source_value is None %}
+                        -
+                    {% elif result.field == 'complete_record' %}
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#sourceModal{{ forloop.counter }}">
+                            View Details
+                        </button>
+                    {% else %}
+                        {{ result.source_value|default:"-" }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if result.target_value is None %}
+                        -
+                    {% elif result.field == 'complete_record' %}
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#targetModal{{ forloop.counter }}">
+                            View Details
+                        </button>
+                    {% else %}
+                        {{ result.target_value|default:"-" }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if result.discrepancy_type and result.discrepancy_type != 'missing_record' %}
+                        {{ result.discrepancy_type }}
+                        {% if result.difference and result.difference is not None and result.difference|is_numeric %}
+                            (Difference: {{ result.difference|floatformat:2 }})
+                        {% endif %}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center">No discrepancies found with current filters</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div>
+    {% for item in modal_results%}
+       
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Complete Record Details</h5>
+                
+                <ul>
+                    <li>
+                        {{item.id}}
+                        {{item.source_value.0.ID}}
+                        {{item.target_value}}
+
+                        
+                    </li>
+                </ul>
+            </div>
+       
+    {% endfor %}
+</div>
+
+        {% for result in modal_results %}
+            
+                <!-- Source Value Modal -->
+                <div class="modal fade" id="sourceModal{{ forloop.counter }}" tabindex="-1" aria-labelledby="sourceModalLabel{{ forloop.counter }}" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="sourceModalLabel{{ forloop.counter }}">Complete Source Record Details</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Field</th>
+                                            
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            
+                                            <td>{{ result.source_value}}</td>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Target Value Modal -->
+                <div class="modal fade" id="targetModal{{ forloop.counter }}" tabindex="-1" aria-labelledby="targetModalLabel{{ forloop.counter }}" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="targetModalLabel{{ forloop.counter }}">Complete Target Record Details</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th>Field</th>
+                                           
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>{{ result.target_value}}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            
+        {% endfor %}
+
 
                     {% if results.paginator.num_pages > 1 %}
                     <nav aria-label="Page navigation" class="mt-4">

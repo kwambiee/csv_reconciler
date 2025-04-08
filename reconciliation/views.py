@@ -15,6 +15,8 @@ from datetime import datetime
 from django.core.paginator import Paginator
 from django.db.models import Q
 from django.utils.text import slugify
+import json
+import ast
 
 class CSVReconciliationAPI(APIView):
     def post(self, request):
@@ -170,19 +172,56 @@ class UploadView(View):
         file_upload.save()
         return file_upload
     
+    # def save_report(self, source_upload, target_upload, ignore_columns, result):
+    #     # Generate report filename
+    #     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    #     report_filename = f"report_{source_upload.id}_{target_upload.id}_{timestamp}.csv"
+        
+    #     # Save results to CSV
+    #     results_df = pd.DataFrame(result['results'])
+    #     report_content = results_df.to_csv(index=False)
+        
+    #     # Create report file
+    #     report_file = ContentFile(report_content.encode('utf-8'), name=report_filename)
+        
+    #     print(results_df, "----results_df")
+        
+    #     # Create report record
+    #     report = ReconciliationReport(
+    #         source_file=source_upload,
+    #         target_file=target_upload,
+    #         missing_in_target=result['missing_in_target'],
+    #         missing_in_source=result['missing_in_source'],
+    #         field_discrepancies=result['field_discrepancies'],
+    #         ignore_columns=ignore_columns,
+    #     )
+    #     report.report_file.save(report_filename, report_file)
+    #     report.save()
+        
+    #     return report
+    
+    
     def save_report(self, source_upload, target_upload, ignore_columns, result):
         # Generate report filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         report_filename = f"report_{source_upload.id}_{target_upload.id}_{timestamp}.csv"
         
-        # Save results to CSV
+        # Convert results to DataFrame
         results_df = pd.DataFrame(result['results'])
+        
+        # Handle dictionary values in source_value and target_value
+        for col in ['source_value', 'target_value']:
+            if results_df[col].apply(lambda x: isinstance(x, dict)).any():
+                print (results_df[col], "----results_df[col]")
+                results_df[col] = results_df[col].apply(
+                    lambda x: str(x) if isinstance(x, dict) else x
+                )
+        
+        # Save results to CSV
         report_content = results_df.to_csv(index=False)
         
         # Create report file
         report_file = ContentFile(report_content.encode('utf-8'), name=report_filename)
-        
-        print(results_df, "----results_df")
         
         # Create report record
         report = ReconciliationReport(
@@ -198,7 +237,7 @@ class UploadView(View):
         
         return report
 
-class ReportDetailView(View):
+class ReportDetailView(View):    
     def get(self, request, report_id):
         report = get_object_or_404(ReconciliationReport, id=report_id)
         
@@ -209,11 +248,31 @@ class ReportDetailView(View):
         
         # Read report data
         results_df = pd.read_csv(report.report_file.path)
+        
+        # Convert JSON strings back to dictionaries
+
+
+    #     for col in ['source_value', 'target_value']:
+    # # Check if any element in the column is a string that starts and ends with '{' and '}'
+    #         if results_df[col].apply(lambda x: isinstance(x, str) and x.startswith('{') and x.endswith('}')).any():
+    #             for idx, val in results_df[col].items():
+    #                 try:
+    #                     # Apply json.loads only if the value is a valid string that starts and ends with curly braces
+    #                     if isinstance(val, str) and val.startswith('{') and val.endswith('}'):
+    #                         # Replace single quotes with double quotes to make it valid JSON
+    #                         val = val.replace("'", '"')
+    #                         results_df.at[idx, col] = json.loads(val)
+    #                 except json.JSONDecodeError as e:
+    #                     # Catch the exception and print detailed error info
+    #                     print(f"JSON Decode Error: {e} at index {idx} in column {col}")
+    #                     print(f"Value: {val}")
+    #                     print("DataFrame:", results_df)
+
+# Convert the DataFrame to a list of dictionaries (records)
         results = results_df.to_dict('records')
         
         # Apply filters
         filtered_results = results
-        print(filtered_results, "----filtered_results")
         if discrepancy_type:
             filtered_results = [r for r in filtered_results if r['type'] == discrepancy_type]
         if field_name:
@@ -237,15 +296,41 @@ class ReportDetailView(View):
         unique_types = results_df['type'].unique()
         unique_fields = results_df['field'].dropna().unique()
         
-        return render(request, 'reconciliation/report_detail.html', {
-            'report': report,
-            'results': page_obj,
-            'unique_types': unique_types,
-            'unique_fields': unique_fields,
-            'current_type_filter': discrepancy_type,
-            'current_field_filter': field_name,
-            'search_query': search_query
-        })
+        print(filtered_results, "----filtered_results")
+
+        model_results = []
+
+        for result in filtered_results:
+            if result.get('field') == "complete_record":
+                val = result.get('source_value') or result.get('target_value')
+
+        # If val is a dict, wrap it in a list to standardize as array of objects
+                if isinstance(val, dict):
+                    val = [val]
+                    
+                    
+                model_results.append({
+                'id': result.get('id'),
+                'field': result.get('field'),
+                'source_value': val,
+                'target_value': val,
+            })     
+            
+                print(model_results, "----model_results")
+                
+                return render(request, 'reconciliation/report_detail.html', {
+                    'report': report,
+                    'results': filtered_results,
+                    'unique_types': unique_types,
+                    'unique_fields': unique_fields,
+                    'current_type_filter': discrepancy_type,
+                    'current_field_filter': field_name,
+                    'search_query': search_query,
+                    'modal_results': model_results,
+                    
+                })
+
+
 
 class FilePreviewView(View):
     def get(self, request, file_id):
