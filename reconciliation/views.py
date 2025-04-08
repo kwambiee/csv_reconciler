@@ -1,17 +1,20 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from .services import CSVReconciler
-from django.shortcuts import render
 from django.views import View
-from django.http import JsonResponse
-from .services import CSVReconciler
+from django.http import JsonResponse, HttpResponse
+from .models import UploadedFile, ReconciliationReport
 import pandas as pd
 import os
 import uuid
+from datetime import datetime
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.utils.text import slugify
 
 class CSVReconciliationAPI(APIView):
     def post(self, request):
@@ -25,9 +28,9 @@ class CSVReconciliationAPI(APIView):
             )
         
         try:
-            # Save files temporarily
-            source_path = self.save_temp_file(source_file)
-            target_path = self.save_temp_file(target_file)
+            # Save files to persistent storage
+            source_upload = self.save_uploaded_file(source_file, 'source')
+            target_upload = self.save_uploaded_file(target_file, 'target')
             
             # Get ignore columns from request
             ignore_columns = request.data.get('ignore_columns', '').split(',')
@@ -35,17 +38,19 @@ class CSVReconciliationAPI(APIView):
             
             # Perform reconciliation
             reconciler = CSVReconciler(
-                source_path=source_path,
-                target_path=target_path,
+                source_path=source_upload.file.path,
+                target_path=target_upload.file.path,
                 ignore_columns=ignore_columns
             )
             result = reconciler.reconcile()
             
-            # Clean up temp files
-            os.remove(source_path)
-            os.remove(target_path)
+            # Save report
+            report = self.save_report(source_upload, target_upload, ignore_columns, result)
             
-            return Response(result, status=status.HTTP_200_OK)
+            return Response({
+                'report_id': report.id,
+                'results': result
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response(
@@ -53,24 +58,58 @@ class CSVReconciliationAPI(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
     
-    def save_temp_file(self, file):
-        temp_dir = 'temp'
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
+    def save_uploaded_file(self, file, file_type):
+        original_filename = file.name
+        file_upload = UploadedFile(
+            file=file,
+            original_filename=original_filename,
+            file_type=file_type
+        )
         
-        file_name = f"{uuid.uuid4()}_{file.name}"
-        file_path = os.path.join(temp_dir, file_name)
+        # Read the file to get metadata
+        try:
+            df = pd.read_csv(file)
+            file_upload.row_count = len(df)
+            file_upload.columns = list(df.columns)
+        except Exception as e:
+            raise ValueError(f"Error reading file: {str(e)}")
         
-        with open(file_path, 'wb+') as destination:
-            for chunk in file.chunks():
-                destination.write(chunk)
-                
-        return file_path
-
+        file_upload.save()
+        return file_upload
+    
+    def save_report(self, source_upload, target_upload, ignore_columns, result):
+        # Generate report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_filename = f"report_{source_upload.id}_{target_upload.id}_{timestamp}.csv"
+        
+        # Save results to CSV
+        results_df = pd.DataFrame(result['results'])
+        report_content = results_df.to_csv(index=False)
+        
+        # Create report file
+        report_file = ContentFile(report_content.encode('utf-8'), name=report_filename)
+        
+        # Create report record
+        report = ReconciliationReport(
+            source_file=source_upload,
+            target_file=target_upload,
+            missing_in_target=result['missing_in_target'],
+            missing_in_source=result['missing_in_source'],
+            field_discrepancies=result['field_discrepancies'],
+            ignore_columns=ignore_columns
+        )
+        report.report_file.save(report_filename, report_file)
+        report.save()
+        
+        return report
 
 class HomeView(View):
     def get(self, request):
-        return render(request, 'reconciliation/home.html')
+        # Show recent reports
+        recent_reports = ReconciliationReport.objects.all().order_by('-created_at')[:5]
+        return render(request, 'reconciliation/home.html', {
+            'recent_reports': recent_reports
+        })
 
 class UploadView(View):
     def get(self, request):
@@ -87,49 +126,165 @@ class UploadView(View):
             })
         
         try:
-            # Save files temporarily
-            source_path = self.save_temp_file(source_file)
-            target_path = self.save_temp_file(target_file)
+            # Save files to persistent storage
+            source_upload = self.save_uploaded_file(source_file, 'source')
+            target_upload = self.save_uploaded_file(target_file, 'target')
             
             # Process ignore columns
             ignore_list = [col.strip() for col in ignore_columns.split(',') if col.strip()]
             
             # Perform reconciliation
             reconciler = CSVReconciler(
-                source_path=source_path,
-                target_path=target_path,
+                source_path=source_upload.file.path,
+                target_path=target_upload.file.path,
                 ignore_columns=ignore_list
             )
             result = reconciler.reconcile()
             
-            # Convert results to DataFrame for HTML rendering
-            results_df = pd.DataFrame(result['results'])
+            # Save report
+            report = self.save_report(source_upload, target_upload, ignore_list, result)
             
-            # Clean up temp files
-            os.remove(source_path)
-            os.remove(target_path)
-            
-            return render(request, 'reconciliation/report.html', {
-                'missing_in_target': result['missing_in_target'],
-                'missing_in_source': result['missing_in_source'],
-                'field_discrepancies': result['field_discrepancies'],
-                'results': results_df.to_dict('records')
-            })
+            return redirect('report_detail', report_id=report.id)
             
         except Exception as e:
             return render(request, 'reconciliation/upload.html', {
                 'error': str(e)
             })
     
-    def save_temp_file(self, file):
-        temp_dir = 'temp'
-        if not os.path.exists(temp_dir):
-            os.makedirs(temp_dir)
+    def save_uploaded_file(self, file, file_type):
+        original_filename = file.name
+        file_upload = UploadedFile(
+            file=file,
+            original_filename=original_filename,
+            file_type=file_type
+        )
         
-        file_path = os.path.join(temp_dir, file.name)
+        # Read the file to get metadata
+        try:
+            df = pd.read_csv(file)
+            file_upload.row_count = len(df)
+            file_upload.columns = list(df.columns)
+        except Exception as e:
+            raise ValueError(f"Error reading file: {str(e)}")
         
-        with open(file_path, 'wb+') as destination:
-            for chunk in file.chunks():
-                destination.write(chunk)
-                
-        return file_path
+        file_upload.save()
+        return file_upload
+    
+    def save_report(self, source_upload, target_upload, ignore_columns, result):
+        # Generate report filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        report_filename = f"report_{source_upload.id}_{target_upload.id}_{timestamp}.csv"
+        
+        # Save results to CSV
+        results_df = pd.DataFrame(result['results'])
+        report_content = results_df.to_csv(index=False)
+        
+        # Create report file
+        report_file = ContentFile(report_content.encode('utf-8'), name=report_filename)
+        
+        print(results_df, "----results_df")
+        
+        # Create report record
+        report = ReconciliationReport(
+            source_file=source_upload,
+            target_file=target_upload,
+            missing_in_target=result['missing_in_target'],
+            missing_in_source=result['missing_in_source'],
+            field_discrepancies=result['field_discrepancies'],
+            ignore_columns=ignore_columns,
+        )
+        report.report_file.save(report_filename, report_file)
+        report.save()
+        
+        return report
+
+class ReportDetailView(View):
+    def get(self, request, report_id):
+        report = get_object_or_404(ReconciliationReport, id=report_id)
+        
+        # Get filter parameters
+        discrepancy_type = request.GET.get('type', '')
+        field_name = request.GET.get('field', '')
+        search_query = request.GET.get('search', '')
+        
+        # Read report data
+        results_df = pd.read_csv(report.report_file.path)
+        results = results_df.to_dict('records')
+        
+        # Apply filters
+        filtered_results = results
+        print(filtered_results, "----filtered_results")
+        if discrepancy_type:
+            filtered_results = [r for r in filtered_results if r['type'] == discrepancy_type]
+        if field_name:
+            filtered_results = [r for r in filtered_results if r['field'] == field_name]
+        if search_query:
+            search_query = search_query.lower()
+            filtered_results = [
+                r for r in filtered_results 
+                if search_query in str(r['id']).lower() or 
+                    (r['field'] and search_query in str(r['field']).lower()) or
+                    (r['source_value'] and search_query in str(r['source_value']).lower()) or
+                    (r['target_value'] and search_query in str(r['target_value']).lower())
+            ]
+        
+        # Pagination
+        paginator = Paginator(filtered_results, 50)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+        
+        # Get unique values for filters
+        unique_types = results_df['type'].unique()
+        unique_fields = results_df['field'].dropna().unique()
+        
+        return render(request, 'reconciliation/report_detail.html', {
+            'report': report,
+            'results': page_obj,
+            'unique_types': unique_types,
+            'unique_fields': unique_fields,
+            'current_type_filter': discrepancy_type,
+            'current_field_filter': field_name,
+            'search_query': search_query
+        })
+
+class FilePreviewView(View):
+    def get(self, request, file_id):
+        file = get_object_or_404(UploadedFile, id=file_id)
+        
+        # Read sample data (first 50 rows)
+        try:
+            df = pd.read_csv(file.file.path)
+            sample_data = df.head(50).to_dict('records')
+            columns = df.columns.tolist()
+        except Exception as e:
+            return render(request, 'reconciliation/error.html', {
+                'error': f"Could not read file: {str(e)}"
+            })
+        
+        return render(request, 'reconciliation/file_preview.html', {
+            'file': file,
+            'sample_data': sample_data,
+            'columns': columns,
+            'row_count': len(df)
+        })
+
+class ReportHistoryView(View):
+    def get(self, request):
+        search_query = request.GET.get('q', '')
+        
+        reports = ReconciliationReport.objects.all().order_by('-created_at')
+        
+        if search_query:
+            reports = reports.filter(
+                Q(source_file__original_filename__icontains=search_query) |
+                Q(target_file__original_filename__icontains=search_query)
+            )
+        
+        paginator = Paginator(reports, 20)
+        page_number = request.GET.get('page', 1)
+        page_obj = paginator.get_page(page_number)
+        
+        return render(request, 'reconciliation/report_history.html', {
+            'reports': page_obj,
+            'search_query': search_query
+        })
