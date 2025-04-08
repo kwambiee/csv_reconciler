@@ -97,27 +97,11 @@ Run all tests:
 pytest
 ```
 
-Key test cases:
-- Missing record detection
-- Field-level discrepancy identification
-- Case-insensitive comparisons
-- Date format handling
+###  Video Demonstration
 
-## Deployment
+Here is the link to the [Video Demonstration](https://www.loom.com/share/99a59f6ad3724b43a05aa42a33f38057?sid=fa535f66-45ce-476c-b825-400045f626be) of the tool in action.
 
-### Production
-Recommended deployment options:
-1. **Docker**:
-   ```bash
-   docker build -t csv-reconciler .
-   docker run -p 8000:8000 csv-reconciler
-   ```
 
-2. **Heroku**:
-   ```bash
-   heroku create
-   git push heroku main
-   ```
 
 ### Environment Variables
 Set in `.env`:
@@ -137,7 +121,7 @@ ALLOWED_HOSTS=.yourdomain.com
 ├── web/               # Django app
 │   ├── views.py       # Web interface
 │   └── api.py         # REST API endpoints
-└── cli/               # Command line interface
+└──               # Command line interface
 ```
 
 ### Dependencies
@@ -154,14 +138,3 @@ ALLOWED_HOSTS=.yourdomain.com
 ## License
 MIT
 ```
-
-Key sections included:
-1. Clear installation instructions
-2. Usage examples for both interfaces
-3. Sample CSV formats
-4. Testing methodology
-5. Deployment options
-6. Architecture overview
-7. Contribution guidelines
-
-The README provides everything a developer needs to get started with the project, while also serving as documentation for end users. You can customize the deployment and contributing sections based on your specific requirements.

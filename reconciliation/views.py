@@ -308,7 +308,6 @@ class ReportDetailView(View):
             'unique_types': unique_types,
             'unique_fields': unique_fields,
             'current_type_filter': discrepancy_type,
-            'current_field_filter': field_name,
             'search_query': search_query,
             'modal_results': model_results,
         })
